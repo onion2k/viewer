@@ -9,8 +9,8 @@
     "start": "electron .",
     "dev": "electron .",
     "pack": "electron-builder --dir",
-    "dist": "electron-builder --mac dmg zip --publish never",
-    "release": "electron-builder --mac dmg zip --publish always"
+    "dist": "electron-builder --mac dmg --publish never",
+    "release": "electron-builder --mac dmg --publish always"
   },
   "devDependencies": {
     "electron": "^35.0.0",
@@ -27,12 +27,15 @@
       "package.json"
     ],
     "asar": true,
+    "compression": "maximum",
+    "electronLanguages": [
+      "en"
+    ],
     "mac": {
       "icon": "build/icon-bg.icns",
       "category": "public.app-category.photography",
       "target": [
-        "dmg",
-        "zip"
+        "dmg"
       ]
     },
     "publish": [
