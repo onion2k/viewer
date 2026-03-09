@@ -1,0 +1,41 @@
+{
+  "name": "viewer",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Simple local image viewer desktop app",
+  "author": "Christopher Neale",
+  "main": "src/main/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron .",
+    "pack": "electron-builder --dir",
+    "dist": "electron-builder --mac dmg zip --publish never"
+  },
+  "devDependencies": {
+    "electron": "^35.0.0",
+    "electron-builder": "^24.13.3"
+  },
+  "build": {
+    "appId": "com.christopherneale.viewer",
+    "productName": "Viewer",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "src/**/*",
+      "package.json"
+    ],
+    "asar": true,
+    "mac": {
+      "icon": "build/icon-bg.icns",
+      "category": "public.app-category.photography",
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    }
+  },
+  "dependencies": {
+    "exifr": "^7.1.3"
+  }
+}

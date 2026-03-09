@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Local Image Viewer</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <header class="toolbar">
+      <button id="selectFolderBtn" type="button">Select Folder</button>
+      <button id="deleteBtn" type="button" disabled>Delete Image</button>
+      <button id="moveBtn" type="button" disabled>Move image</button>
+      <button id="changeMoveFolderBtn" type="button" disabled>Change move folder</button>
+      <input id="folderInput" type="file" webkitdirectory directory multiple hidden />
+      <p id="statusText" class="status">No folder selected.</p>
+      <div class="sort-control">
+        <label for="orderSelect">Order</label>
+        <select id="orderSelect">
+          <option value="created-desc" selected>Newest first</option>
+          <option value="created-asc">Oldest first</option>
+          <option value="name-asc">Name A-Z</option>
+          <option value="name-desc">Name Z-A</option>
+        </select>
+      </div>
+    </header>
+
+    <main class="viewer">
+      <button id="firstBtn" class="nav nav-left nav-skip" type="button" aria-label="First image">
+        &#171;
+      </button>
+      <button id="prevBtn" class="nav nav-left" type="button" aria-label="Previous image">
+        &#10094;
+      </button>
+
+      <img id="leftPreviewEl" class="side-preview side-preview-left" alt="" />
+
+      <section id="stage" class="stage" aria-live="polite">
+        <div class="stage-topbar">
+          <div class="tab-bar" role="tablist" aria-label="Viewer tabs">
+            <button id="imageTabBtn" class="tab-btn" type="button" role="tab" aria-selected="true" aria-controls="imageTabPanel">
+              Image
+            </button>
+            <button id="dataTabBtn" class="tab-btn" type="button" role="tab" aria-selected="false" aria-controls="dataTabPanel">
+              File data
+            </button>
+          </div>
+          <div class="size-controls" role="group" aria-label="Image size mode">
+            <button id="actualSizeBtn" class="size-btn" type="button" aria-pressed="false">Actual size</button>
+            <button id="coverSizeBtn" class="size-btn" type="button" aria-pressed="false">Cover</button>
+            <button id="fitSizeBtn" class="size-btn" type="button" aria-pressed="true">Fit</button>
+          </div>
+        </div>
+
+        <section id="imageTabPanel" class="tab-panel tab-panel-image" role="tabpanel" aria-labelledby="imageTabBtn">
+          <div id="imageArea" class="image-area">
+            <img id="imageEl" alt="" />
+          </div>
+          <p id="filenameEl" class="filename"></p>
+        </section>
+
+        <section id="dataTabPanel" class="tab-panel tab-panel-data" role="tabpanel" aria-labelledby="dataTabBtn" hidden>
+          <p id="dataFilenameEl" class="filename data-filename"></p>
+          <div id="exifPanel" class="exif-panel">
+            <table id="exifTable" class="exif-table" aria-label="EXIF metadata">
+              <tbody id="exifBody"></tbody>
+            </table>
+          </div>
+        </section>
+      </section>
+
+      <img id="rightPreviewEl" class="side-preview side-preview-right" alt="" />
+
+      <button id="nextBtn" class="nav nav-right" type="button" aria-label="Next image">
+        &#10095;
+      </button>
+      <button id="lastBtn" class="nav nav-right nav-skip" type="button" aria-label="Last image">
+        &#187;
+      </button>
+    </main>
+
+    <script src="./renderer.js"></script>
+  </body>
+</html>
