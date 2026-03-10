@@ -1,6 +1,6 @@
 {
   "name": "viewer",
-  "version": "1.0.2",
+  "version": "1.1.0",
   "private": true,
   "description": "Simple local image viewer desktop app",
   "author": "Christopher Neale",
