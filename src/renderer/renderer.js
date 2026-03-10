@@ -14,17 +14,12 @@ const imageArea = document.getElementById("imageArea");
 const actualSizeBtn = document.getElementById("actualSizeBtn");
 const coverSizeBtn = document.getElementById("coverSizeBtn");
 const fitSizeBtn = document.getElementById("fitSizeBtn");
-const moveInboxBtn = document.getElementById("moveInboxBtn");
-const moveSelectedBtn = document.getElementById("moveSelectedBtn");
-const moveRejectsBtn = document.getElementById("moveRejectsBtn");
-const moveHoldBtn = document.getElementById("moveHoldBtn");
+const moveOutput1Btn = document.getElementById("moveOutput1Btn");
+const moveOutput2Btn = document.getElementById("moveOutput2Btn");
+const curationDeleteBtn = document.getElementById("curationDeleteBtn");
+const output1PathEl = document.getElementById("output1PathEl");
+const output2PathEl = document.getElementById("output2PathEl");
 const undoMoveBtn = document.getElementById("undoMoveBtn");
-const workflowStatsEl = document.getElementById("workflowStatsEl");
-const auditLogEl = document.getElementById("auditLogEl");
-const sessionFlagSelect = document.getElementById("sessionFlagSelect");
-const sessionRatingSelect = document.getElementById("sessionRatingSelect");
-const sessionFilterSelect = document.getElementById("sessionFilterSelect");
-const sessionNoteInput = document.getElementById("sessionNoteInput");
 const exifPanel = document.getElementById("exifPanel");
 const exifBody = document.getElementById("exifBody");
 const deleteBtn = document.getElementById("deleteBtn");
@@ -45,6 +40,7 @@ const hasElectronBackend =
   typeof electronApi.readImage === "function" &&
   typeof electronApi.readExif === "function" &&
   typeof electronApi.deleteImage === "function" &&
+  typeof electronApi.pickDestinationFolder === "function" &&
   typeof electronApi.listWorkflowFolders === "function" &&
   typeof electronApi.moveImageToFolder === "function" &&
   typeof electronApi.bulkMoveImages === "function" &&
@@ -62,12 +58,14 @@ let isDeleting = false;
 let isMoving = false;
 let activeTab = "image";
 let imageSizeMode = "fit";
+let hasInputFolderSelected = false;
 let workflowRootPath = "";
 let workflowSourceFolderPath = "";
+let workflowStatsText = "";
+let statusMessageText = "";
 const workflowFoldersByKey = new Map();
-const sessionStateByImagePath = new Map();
+const customWorkflowDestinationByKey = new Map();
 const moveHistory = [];
-const auditEntries = [];
 let zoomScale = 1;
 let panOffsetX = 0;
 let panOffsetY = 0;
@@ -99,15 +97,10 @@ async function init() {
   actualSizeBtn.addEventListener("click", () => setImageSizeMode("actual"));
   coverSizeBtn.addEventListener("click", () => setImageSizeMode("cover"));
   fitSizeBtn.addEventListener("click", () => setImageSizeMode("fit"));
-  moveInboxBtn.addEventListener("click", () => moveCurrentImageToWorkflow("inbox"));
-  moveSelectedBtn.addEventListener("click", () => moveCurrentImageToWorkflow("selected"));
-  moveRejectsBtn.addEventListener("click", () => moveCurrentImageToWorkflow("rejects"));
-  moveHoldBtn.addEventListener("click", () => moveCurrentImageToWorkflow("hold"));
+  moveOutput1Btn.addEventListener("click", () => moveCurrentImageToWorkflow("output1"));
+  moveOutput2Btn.addEventListener("click", () => moveCurrentImageToWorkflow("output2"));
+  curationDeleteBtn.addEventListener("click", onDeleteImage);
   undoMoveBtn.addEventListener("click", undoLastMove);
-  sessionFlagSelect.addEventListener("change", onSessionStateChanged);
-  sessionRatingSelect.addEventListener("change", onSessionStateChanged);
-  sessionFilterSelect.addEventListener("change", applySessionFilter);
-  sessionNoteInput.addEventListener("change", onSessionStateChanged);
   imageArea.addEventListener("mousedown", onPanStart);
   window.addEventListener("mousemove", onPanMove);
   window.addEventListener("mouseup", onPanEnd);
@@ -115,10 +108,14 @@ async function init() {
   updateTabState();
   refreshWorkflowButtons();
   renderWorkflowStats();
-  renderAuditLog();
+  renderOutputPathLabels();
+  setUiEnabled(false);
 
   window.addEventListener("keydown", (event) => {
-    if (isFormFieldFocused()) {
+    if (!hasInputFolderSelected) {
+      return;
+    }
+    if (isTextEntryFocused()) {
       return;
     }
 
@@ -128,34 +125,17 @@ async function init() {
     } else if (event.key === "ArrowRight") {
       event.preventDefault();
       navigate(1);
-    } else if (event.key === "1") {
+    } else if (event.code === "Digit1" || event.code === "Numpad1") {
       event.preventDefault();
-      if (event.altKey) {
-        void moveFilteredImagesToWorkflow("inbox");
-      } else {
-        void moveCurrentImageToWorkflow("inbox");
-      }
-    } else if (event.key === "2") {
+      void triggerWorkflowShortcut("output1", event.altKey);
+    } else if (event.code === "Digit2" || event.code === "Numpad2") {
       event.preventDefault();
-      if (event.altKey) {
-        void moveFilteredImagesToWorkflow("selected");
-      } else {
-        void moveCurrentImageToWorkflow("selected");
-      }
-    } else if (event.key === "3") {
+      void triggerWorkflowShortcut("output2", event.altKey);
+    } else if (event.code === "Digit3" || event.code === "Numpad3") {
       event.preventDefault();
-      if (event.altKey) {
-        void moveFilteredImagesToWorkflow("rejects");
-      } else {
-        void moveCurrentImageToWorkflow("rejects");
-      }
-    } else if (event.key === "4") {
+    } else if (event.key.toLowerCase() === "d") {
       event.preventDefault();
-      if (event.altKey) {
-        void moveFilteredImagesToWorkflow("hold");
-      } else {
-        void moveCurrentImageToWorkflow("hold");
-      }
+      void onDeleteImage();
     } else if (event.key.toLowerCase() === "u") {
       event.preventDefault();
       void undoLastMove();
@@ -185,7 +165,7 @@ async function init() {
     }
   });
   if (!hasElectronBackend) {
-    setStatus("Select a folder to load JPG/PNG images.");
+    setStatus("Select an input folder to load JPG/PNG images.");
     return;
   }
 
@@ -196,7 +176,7 @@ async function init() {
   setStatus("Checking saved folder...");
   const payload = await electronApi.loadLastFolder();
   if (!payload) {
-    setStatus("No folder selected.");
+    setStatus("No input folder selected.");
     return;
   }
 
@@ -224,11 +204,12 @@ async function onSelectFolder() {
 async function applyFolderPayload(payload, options = {}) {
   const preserveCurrentImage = !!options.preserveCurrentImage;
   const isRefresh = !!options.isRefresh;
-  const useWorkflowSource = options.useWorkflowSource !== false;
   const preferredIndex = Number.isInteger(options.preferredIndex) ? options.preferredIndex : null;
   const statusPrefix = typeof options.statusPrefix === "string" ? options.statusPrefix : "";
   const previousKey = preserveCurrentImage && imageItems[currentIndex] ? imageItems[currentIndex].key : null;
   const folderPath = typeof payload.folderPath === "string" ? payload.folderPath : "";
+  hasInputFolderSelected = folderPath.length > 0 || allImageItems.length > 0;
+  setUiEnabled(hasInputFolderSelected);
 
   allImageItems = (payload.images || []).map((item) => ({
     key: item.path,
@@ -239,23 +220,8 @@ async function applyFolderPayload(payload, options = {}) {
   }));
   sortImageItems(allImageItems);
   await refreshWorkflowFolders(folderPath);
-  if (
-    hasElectronBackend &&
-    useWorkflowSource &&
-    workflowSourceFolderPath &&
-    folderPath &&
-    workflowSourceFolderPath !== folderPath
-  ) {
-    const sourcePayload = await electronApi.loadFolder(workflowSourceFolderPath);
-    if (sourcePayload) {
-      await applyFolderPayload(sourcePayload, {
-        ...options,
-        useWorkflowSource: false,
-      });
-      return;
-    }
-  }
-  applySessionFilter();
+  imageItems = allImageItems.slice();
+  renderWorkflowStats();
 
   if (previousKey) {
     const existingIndex = imageItems.findIndex((item) => item.key === previousKey);
@@ -312,12 +278,15 @@ function onFolderInputChange(event) {
     }));
 
   sortImageItems(allImageItems);
-  applySessionFilter();
+  imageItems = allImageItems.slice();
+  renderWorkflowStats();
 
   currentIndex = 0;
 
   const firstPath = fileList[0].webkitRelativePath || "";
   const folderName = firstPath.includes("/") ? firstPath.split("/")[0] : "selected folder";
+  hasInputFolderSelected = true;
+  setUiEnabled(true);
 
   if (allImageItems.length === 0) {
     clearImage();
@@ -334,7 +303,8 @@ function onFolderInputChange(event) {
 function onSortOrderChange() {
   currentSortOrder = orderSelect.value;
   sortImageItems(allImageItems);
-  applySessionFilter();
+  imageItems = allImageItems.slice();
+  renderWorkflowStats();
   currentIndex = 0;
 
   if (imageItems.length === 0) {
@@ -446,6 +416,15 @@ async function refreshWorkflowFolders(folderPath) {
     for (const folder of workflow.folders || []) {
       workflowFoldersByKey.set(folder.key, folder);
     }
+    for (const [key, folderPathValue] of customWorkflowDestinationByKey.entries()) {
+      workflowFoldersByKey.set(key, {
+        key,
+        name: pathBasename(folderPathValue),
+        path: folderPathValue,
+        count: 0,
+        exists: true,
+      });
+    }
   } catch (error) {
     console.error(error);
     workflowRootPath = folderPath;
@@ -455,19 +434,27 @@ async function refreshWorkflowFolders(folderPath) {
 
   refreshWorkflowButtons();
   renderWorkflowStats();
+  renderOutputPathLabels();
 }
 
 async function moveCurrentImageToWorkflow(folderKey) {
   if (!hasElectronBackend || isMoving || imageItems.length === 0) {
+    if (imageItems.length === 0) {
+      setStatus("No visible image to move.");
+    }
     return;
   }
 
-  const target = workflowFoldersByKey.get(folderKey);
+  const target = await ensureWorkflowDestination(folderKey);
   const item = imageItems[currentIndex];
   if (!target || !item || item.mode !== "electron") {
+    const message = !target ? "Move canceled." : "Current item cannot be moved from this source.";
+    appendAudit(message);
+    setStatus(message);
     return;
   }
   if (pathDirname(item.path) === target.path) {
+    setStatus(trimFilenameForStatus(item.name) + " is already in " + target.name + ".");
     return;
   }
 
@@ -495,18 +482,49 @@ async function moveCurrentImageToWorkflow(folderKey) {
   }
 }
 
+async function ensureWorkflowDestination(folderKey) {
+  const existing = workflowFoldersByKey.get(folderKey);
+  if (existing && existing.exists !== false && existing.path) {
+    return existing;
+  }
+
+  const chosenPath = await electronApi.pickDestinationFolder("Select destination for " + folderKey);
+  if (!chosenPath) {
+    return null;
+  }
+  customWorkflowDestinationByKey.set(folderKey, chosenPath);
+  const folder = {
+    key: folderKey,
+    name: pathBasename(chosenPath),
+    path: chosenPath,
+    count: 0,
+    exists: true,
+  };
+  workflowFoldersByKey.set(folderKey, folder);
+  refreshWorkflowButtons();
+  renderWorkflowStats();
+  renderOutputPathLabels();
+  appendAudit("Set " + folderKey + " destination to " + chosenPath + ".");
+  return folder;
+}
+
 async function moveFilteredImagesToWorkflow(folderKey) {
   if (!hasElectronBackend || isMoving || imageItems.length === 0) {
+    if (imageItems.length === 0) {
+      setStatus("No visible images to move.");
+    }
     return;
   }
-  const target = workflowFoldersByKey.get(folderKey);
+  const target = await ensureWorkflowDestination(folderKey);
   if (!target) {
+    setStatus("Bulk move canceled.");
     return;
   }
   const candidates = imageItems
     .filter((item) => item.mode === "electron" && pathDirname(item.path) !== target.path)
     .map((item) => item.path);
   if (candidates.length === 0) {
+    setStatus("No eligible visible images for " + target.name + ".");
     return;
   }
 
@@ -574,59 +592,6 @@ async function undoLastMove() {
     isMoving = false;
     updateNavigation();
   }
-}
-
-function onSessionStateChanged() {
-  const item = imageItems[currentIndex];
-  if (!item) {
-    return;
-  }
-  const existing = sessionStateByImagePath.get(item.path) || {};
-  const next = {
-    flag: sessionFlagSelect.value,
-    rating: Number.parseInt(sessionRatingSelect.value, 10),
-    note: sessionNoteInput.value.trim(),
-  };
-  sessionStateByImagePath.set(item.path, {
-    flag: next.flag,
-    rating: Number.isFinite(next.rating) ? next.rating : -1,
-    note: next.note,
-  });
-  if (
-    existing.flag !== next.flag ||
-    existing.rating !== next.rating ||
-    existing.note !== next.note
-  ) {
-    appendAudit("Session mark updated for " + trimFilenameForStatus(item.name) + ".");
-  }
-  applySessionFilter();
-}
-
-function applySessionFilter() {
-  const filter = sessionFilterSelect.value;
-  imageItems = allImageItems.filter((item) => {
-    const state = sessionStateByImagePath.get(item.path) || { flag: "none", rating: -1 };
-    if (filter === "all") {
-      return true;
-    }
-    if (filter === "rated") {
-      return Number.isFinite(state.rating) && state.rating >= 0;
-    }
-    if (filter === "unrated") {
-      return !Number.isFinite(state.rating) || state.rating < 0;
-    }
-    return state.flag === filter;
-  });
-
-  if (imageItems.length === 0) {
-    clearImage();
-    renderWorkflowStats();
-    return;
-  }
-
-  currentIndex = Math.min(currentIndex, imageItems.length - 1);
-  renderCurrentImage();
-  renderWorkflowStats();
 }
 
 function sortImageItems(items) {
@@ -721,7 +686,6 @@ async function renderCurrentImage() {
     renderExifEntries(exifEntries);
     resetZoomPan();
     updateImageTransform();
-    syncSessionControlsForCurrentImage();
     currentObjectUrl = nextObjectUrl;
     leftPreviewObjectUrl = nextLeftPreviewObjectUrl;
     rightPreviewObjectUrl = nextRightPreviewObjectUrl;
@@ -748,7 +712,6 @@ async function renderCurrentImage() {
     renderExifEntries([]);
     resetZoomPan();
     updateImageTransform();
-    syncSessionControlsForCurrentImage();
     revokeObjectUrls(previousObjectUrl, previousLeftPreviewObjectUrl, previousRightPreviewObjectUrl);
     updateNavigation();
     console.error(error);
@@ -827,12 +790,12 @@ function clearImage() {
   dataFilenameEl.textContent = "";
   dataFilenameEl.style.display = "none";
   renderExifEntries([]);
-  syncSessionControlsForCurrentImage();
   updateNavigation();
 }
 
 function setStatus(text) {
-  statusText.textContent = text;
+  statusMessageText = typeof text === "string" ? text : "";
+  renderStatusLine();
 }
 
 function isSupportedImage(name) {
@@ -1070,27 +1033,12 @@ function updateImageTransform() {
   }
 }
 
-function syncSessionControlsForCurrentImage() {
-  const item = imageItems[currentIndex];
-  if (!item) {
-    sessionFlagSelect.value = "none";
-    sessionRatingSelect.value = "-1";
-    sessionNoteInput.value = "";
-    return;
-  }
-  const state = sessionStateByImagePath.get(item.path) || { flag: "none", rating: -1, note: "" };
-  sessionFlagSelect.value = state.flag || "none";
-  sessionRatingSelect.value = String(Number.isFinite(state.rating) ? state.rating : -1);
-  sessionNoteInput.value = state.note || "";
-}
-
 function refreshWorkflowButtons() {
   const currentItem = imageItems[currentIndex];
-  const canMove = !!currentItem && currentItem.mode === "electron" && !isMoving;
-  moveInboxBtn.disabled = !canMove || !workflowFoldersByKey.has("inbox");
-  moveSelectedBtn.disabled = !canMove || !workflowFoldersByKey.has("selected");
-  moveRejectsBtn.disabled = !canMove || !workflowFoldersByKey.has("rejects");
-  moveHoldBtn.disabled = !canMove || !workflowFoldersByKey.has("hold");
+  const canMove = hasInputFolderSelected && !!currentItem && currentItem.mode === "electron" && !isMoving;
+  moveOutput1Btn.disabled = !canMove;
+  moveOutput2Btn.disabled = !canMove;
+  curationDeleteBtn.disabled = isDeleting || isMoving || !currentItem || currentItem.mode !== "electron";
   undoMoveBtn.disabled = isMoving || moveHistory.length === 0;
 }
 
@@ -1102,37 +1050,51 @@ function renderWorkflowStats() {
   if (allImageItems.length > 0) {
     parts.push("Visible: " + imageItems.length + "/" + allImageItems.length);
   }
-  for (const key of ["inbox", "selected", "rejects", "hold"]) {
+  for (const key of ["output1", "output2"]) {
     const folder = workflowFoldersByKey.get(key);
     if (folder) {
       parts.push(folder.name + ": " + folder.count);
     }
   }
-  workflowStatsEl.textContent = parts.join(" | ");
+  workflowStatsText = parts.join(" | ");
+  renderStatusLine();
+}
+
+function renderStatusLine() {
+  if (!statusText) {
+    return;
+  }
+  if (workflowStatsText && statusMessageText) {
+    statusText.textContent = statusMessageText + " | " + workflowStatsText;
+    return;
+  }
+  if (workflowStatsText) {
+    statusText.textContent = workflowStatsText;
+    return;
+  }
+  statusText.textContent = statusMessageText;
+}
+
+function renderOutputPathLabels() {
+  setOutputPathLabel(output1PathEl, workflowFoldersByKey.get("output1"));
+  setOutputPathLabel(output2PathEl, workflowFoldersByKey.get("output2"));
+}
+
+function setOutputPathLabel(element, folder) {
+  if (!element) {
+    return;
+  }
+  if (!folder || !folder.path) {
+    element.textContent = "Not set";
+    element.title = "Not set";
+    return;
+  }
+  element.textContent = folder.path;
+  element.title = folder.path;
 }
 
 function appendAudit(message) {
-  const timestamp = new Date().toLocaleTimeString();
-  auditEntries.unshift("[" + timestamp + "] " + message);
-  if (auditEntries.length > 40) {
-    auditEntries.length = 40;
-  }
-  renderAuditLog();
-}
-
-function renderAuditLog() {
-  auditLogEl.replaceChildren();
-  if (auditEntries.length === 0) {
-    const item = document.createElement("div");
-    item.textContent = "No curation actions yet.";
-    auditLogEl.appendChild(item);
-    return;
-  }
-  for (const line of auditEntries) {
-    const item = document.createElement("div");
-    item.textContent = line;
-    auditLogEl.appendChild(item);
-  }
+  setStatus(message);
 }
 
 function pathDirname(filePath) {
@@ -1147,13 +1109,57 @@ function pathDirname(filePath) {
   return filePath.slice(0, lastIndex);
 }
 
-function isFormFieldFocused() {
+function pathBasename(filePath) {
+  if (typeof filePath !== "string" || filePath.length === 0) {
+    return "";
+  }
+  const separator = filePath.includes("\\") ? "\\" : "/";
+  const lastIndex = filePath.lastIndexOf(separator);
+  if (lastIndex < 0) {
+    return filePath;
+  }
+  return filePath.slice(lastIndex + 1) || filePath;
+}
+
+function isTextEntryFocused() {
   const activeElement = document.activeElement;
   if (!activeElement) {
     return false;
   }
   const tag = activeElement.tagName;
-  return tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT";
+  if (tag === "TEXTAREA") {
+    return true;
+  }
+  if (tag === "INPUT") {
+    const inputType = activeElement.getAttribute("type") || "text";
+    return inputType !== "button" && inputType !== "checkbox" && inputType !== "radio";
+  }
+  return activeElement.isContentEditable;
+}
+
+async function triggerWorkflowShortcut(folderKey, isBulk) {
+  if (isBulk) {
+    await moveFilteredImagesToWorkflow(folderKey);
+  } else {
+    await moveCurrentImageToWorkflow(folderKey);
+  }
+}
+
+function setUiEnabled(enabled) {
+  imageTabBtn.disabled = !enabled;
+  dataTabBtn.disabled = !enabled;
+  firstBtn.disabled = !enabled;
+  prevBtn.disabled = !enabled;
+  nextBtn.disabled = !enabled;
+  lastBtn.disabled = !enabled;
+  actualSizeBtn.disabled = !enabled;
+  coverSizeBtn.disabled = !enabled;
+  fitSizeBtn.disabled = !enabled;
+  moveOutput1Btn.disabled = !enabled;
+  moveOutput2Btn.disabled = !enabled;
+  curationDeleteBtn.disabled = !enabled;
+  undoMoveBtn.disabled = !enabled;
+  orderSelect.disabled = !enabled;
 }
 
 function revokeObjectUrls(...urls) {

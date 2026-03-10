@@ -9,6 +9,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   deleteImage: (imagePath) => ipcRenderer.invoke('viewer:deleteImage', imagePath),
   moveImage: (imagePath) => ipcRenderer.invoke('viewer:moveImage', imagePath),
   changeMoveTargetFolder: () => ipcRenderer.invoke('viewer:changeMoveTargetFolder'),
+  pickDestinationFolder: (title) => ipcRenderer.invoke('viewer:pickDestinationFolder', title),
   listWorkflowFolders: (rootPath) => ipcRenderer.invoke('viewer:listWorkflowFolders', rootPath),
   moveImageToFolder: (imagePath, destinationFolder) =>
     ipcRenderer.invoke('viewer:moveImageToFolder', imagePath, destinationFolder),

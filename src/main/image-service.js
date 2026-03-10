@@ -216,24 +216,25 @@ async function listWorkflowFolders(rootPath) {
     directoryEntries.map((entry) => [entry.name.toLowerCase(), path.join(normalizedRoot, entry.name)]),
   );
 
+  const explicitInboxPath = directoriesByLowerName.get('inbox');
+  const sourceFolderPath = explicitInboxPath || normalizedRoot;
+  const sourceCount = await countImagesInFolder(sourceFolderPath);
   const folders = [];
   for (const key of WORKFLOW_FOLDER_KEYS) {
-    const folderPath = directoriesByLowerName.get(key);
-    if (!folderPath) {
-      continue;
-    }
-    const count = await countImagesInFolder(folderPath);
+    const folderPath =
+      key === 'inbox'
+        ? sourceFolderPath
+        : directoriesByLowerName.get(key) || path.join(normalizedRoot, key);
+    const exists = await isDirectory(folderPath);
+    const count = exists ? await countImagesInFolder(folderPath) : 0;
     folders.push({
       key,
-      name: path.basename(folderPath),
+      name: key === 'inbox' && !explicitInboxPath ? 'inbox (root)' : path.basename(folderPath),
       path: folderPath,
       count,
+      exists,
     });
   }
-
-  const inboxFolder = folders.find((folder) => folder.key === 'inbox');
-  const sourceFolderPath = inboxFolder ? inboxFolder.path : normalizedRoot;
-  const sourceCount = await countImagesInFolder(sourceFolderPath);
 
   return {
     rootPath: normalizedRoot,

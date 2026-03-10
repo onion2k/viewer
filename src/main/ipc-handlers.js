@@ -87,6 +87,18 @@ function registerViewerIpcHandlers({ settingsStore, imageService, watchFolder })
     return destinationFolder;
   });
 
+  ipcMain.handle('viewer:pickDestinationFolder', async (event, title) => {
+    const ownerWindow = BrowserWindow.fromWebContents(event.sender) ?? undefined;
+    const result = await dialog.showOpenDialog(ownerWindow, {
+      title: typeof title === 'string' && title.length > 0 ? title : 'Select destination folder',
+      properties: ['openDirectory'],
+    });
+    if (result.canceled || !result.filePaths[0]) {
+      return null;
+    }
+    return result.filePaths[0];
+  });
+
   ipcMain.handle('viewer:listWorkflowFolders', async (_event, rootPath) => {
     return imageService.listWorkflowFolders(rootPath);
   });

@@ -8,12 +8,12 @@
   </head>
   <body>
     <header class="toolbar">
-      <button id="selectFolderBtn" type="button">Select Folder</button>
+      <button id="selectFolderBtn" type="button">Select Input Folder</button>
       <button id="deleteBtn" type="button" disabled hidden>Delete Image</button>
       <button id="moveBtn" type="button" disabled hidden>Move image</button>
       <button id="changeMoveFolderBtn" type="button" disabled hidden>Change move folder</button>
       <input id="folderInput" type="file" webkitdirectory directory multiple hidden />
-      <p id="statusText" class="status">No folder selected.</p>
+      <p id="statusText" class="status">No input folder selected.</p>
       <div class="sort-control">
         <label for="orderSelect">Order</label>
         <select id="orderSelect">
@@ -51,44 +51,14 @@
             <button id="fitSizeBtn" class="size-btn" type="button" aria-pressed="true">Fit</button>
           </div>
           <div class="curation-controls" role="group" aria-label="Curation actions">
-            <button id="moveInboxBtn" class="curation-btn" type="button" disabled>Inbox (1)</button>
-            <button id="moveSelectedBtn" class="curation-btn" type="button" disabled>Selected (2)</button>
-            <button id="moveRejectsBtn" class="curation-btn" type="button" disabled>Rejects (3)</button>
-            <button id="moveHoldBtn" class="curation-btn" type="button" disabled>Hold (4)</button>
+            <button id="moveOutput1Btn" class="curation-btn" type="button" disabled>Output 1 (1)</button>
+            <span id="output1PathEl" class="output-path">Not set</span>
+            <button id="moveOutput2Btn" class="curation-btn" type="button" disabled>Output 2 (2)</button>
+            <span id="output2PathEl" class="output-path">Not set</span>
+            <button id="curationDeleteBtn" class="curation-btn curation-btn-danger" type="button" disabled>Delete (D)</button>
             <button id="undoMoveBtn" class="curation-btn" type="button" disabled>Undo (U)</button>
           </div>
         </div>
-        <div class="session-controls">
-          <label for="sessionFlagSelect">Session flag</label>
-          <select id="sessionFlagSelect">
-            <option value="none" selected>None</option>
-            <option value="pick">Pick</option>
-            <option value="review">Review</option>
-            <option value="reject">Reject</option>
-          </select>
-          <label for="sessionRatingSelect">Rating</label>
-          <select id="sessionRatingSelect">
-            <option value="-1" selected>Unrated</option>
-            <option value="0">0</option>
-            <option value="1">1</option>
-            <option value="2">2</option>
-            <option value="3">3</option>
-            <option value="4">4</option>
-            <option value="5">5</option>
-          </select>
-          <label for="sessionFilterSelect">Filter</label>
-          <select id="sessionFilterSelect">
-            <option value="all" selected>All</option>
-            <option value="pick">Flag: Pick</option>
-            <option value="review">Flag: Review</option>
-            <option value="reject">Flag: Reject</option>
-            <option value="rated">Rated only</option>
-            <option value="unrated">Unrated only</option>
-          </select>
-          <input id="sessionNoteInput" type="text" placeholder="Session note (not saved)" />
-        </div>
-        <p id="workflowStatsEl" class="workflow-stats"></p>
-        <div id="auditLogEl" class="audit-log" aria-live="polite"></div>
 
         <section id="imageTabPanel" class="tab-panel tab-panel-image" role="tabpanel" aria-labelledby="imageTabBtn">
           <div id="imageArea" class="image-area">
