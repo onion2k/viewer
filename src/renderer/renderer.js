@@ -41,6 +41,8 @@ const hasElectronBackend =
   typeof electronApi.readExif === "function" &&
   typeof electronApi.deleteImage === "function" &&
   typeof electronApi.pickDestinationFolder === "function" &&
+  typeof electronApi.getOutputDestinations === "function" &&
+  typeof electronApi.setOutputDestination === "function" &&
   typeof electronApi.listWorkflowFolders === "function" &&
   typeof electronApi.moveImageToFolder === "function" &&
   typeof electronApi.bulkMoveImages === "function" &&
@@ -110,6 +112,7 @@ async function init() {
   renderWorkflowStats();
   renderOutputPathLabels();
   setUiEnabled(false);
+  await loadPersistedOutputDestinations();
 
   window.addEventListener("keydown", (event) => {
     if (!hasInputFolderSelected) {
@@ -493,6 +496,7 @@ async function ensureWorkflowDestination(folderKey) {
     return null;
   }
   customWorkflowDestinationByKey.set(folderKey, chosenPath);
+  await persistOutputDestination(folderKey, chosenPath);
   const folder = {
     key: folderKey,
     name: pathBasename(chosenPath),
@@ -506,6 +510,41 @@ async function ensureWorkflowDestination(folderKey) {
   renderOutputPathLabels();
   appendAudit("Set " + folderKey + " destination to " + chosenPath + ".");
   return folder;
+}
+
+async function loadPersistedOutputDestinations() {
+  if (!hasElectronBackend) {
+    return;
+  }
+  try {
+    const persisted = await electronApi.getOutputDestinations();
+    if (!persisted || typeof persisted !== "object") {
+      return;
+    }
+    if (typeof persisted.output1 === "string" && persisted.output1.length > 0) {
+      customWorkflowDestinationByKey.set("output1", persisted.output1);
+    }
+    if (typeof persisted.output2 === "string" && persisted.output2.length > 0) {
+      customWorkflowDestinationByKey.set("output2", persisted.output2);
+    }
+    renderOutputPathLabels();
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+async function persistOutputDestination(folderKey, folderPath) {
+  if (!hasElectronBackend) {
+    return;
+  }
+  if ((folderKey !== "output1" && folderKey !== "output2") || !folderPath) {
+    return;
+  }
+  try {
+    await electronApi.setOutputDestination(folderKey, folderPath);
+  } catch (error) {
+    console.error(error);
+  }
 }
 
 async function moveFilteredImagesToWorkflow(folderKey) {

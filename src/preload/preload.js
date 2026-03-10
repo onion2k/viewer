@@ -10,6 +10,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   moveImage: (imagePath) => ipcRenderer.invoke('viewer:moveImage', imagePath),
   changeMoveTargetFolder: () => ipcRenderer.invoke('viewer:changeMoveTargetFolder'),
   pickDestinationFolder: (title) => ipcRenderer.invoke('viewer:pickDestinationFolder', title),
+  getOutputDestinations: () => ipcRenderer.invoke('viewer:getOutputDestinations'),
+  setOutputDestination: (outputKey, folderPath) =>
+    ipcRenderer.invoke('viewer:setOutputDestination', outputKey, folderPath),
   listWorkflowFolders: (rootPath) => ipcRenderer.invoke('viewer:listWorkflowFolders', rootPath),
   moveImageToFolder: (imagePath, destinationFolder) =>
     ipcRenderer.invoke('viewer:moveImageToFolder', imagePath, destinationFolder),

@@ -99,6 +99,38 @@ function registerViewerIpcHandlers({ settingsStore, imageService, watchFolder })
     return result.filePaths[0];
   });
 
+  ipcMain.handle('viewer:getOutputDestinations', async () => {
+    const settings = await readSettings();
+    const raw = settings.outputDestinations;
+    if (!raw || typeof raw !== 'object') {
+      return {};
+    }
+    const destinations = {};
+    if (typeof raw.output1 === 'string' && raw.output1.length > 0) {
+      destinations.output1 = raw.output1;
+    }
+    if (typeof raw.output2 === 'string' && raw.output2.length > 0) {
+      destinations.output2 = raw.output2;
+    }
+    return destinations;
+  });
+
+  ipcMain.handle('viewer:setOutputDestination', async (_event, outputKey, folderPath) => {
+    if ((outputKey !== 'output1' && outputKey !== 'output2') || typeof folderPath !== 'string' || folderPath.length === 0) {
+      return null;
+    }
+    const settings = await readSettings();
+    const previous = settings.outputDestinations && typeof settings.outputDestinations === 'object'
+      ? settings.outputDestinations
+      : {};
+    const nextOutputDestinations = {
+      ...previous,
+      [outputKey]: folderPath,
+    };
+    await updateSettings({ outputDestinations: nextOutputDestinations });
+    return nextOutputDestinations;
+  });
+
   ipcMain.handle('viewer:listWorkflowFolders', async (_event, rootPath) => {
     return imageService.listWorkflowFolders(rootPath);
   });
