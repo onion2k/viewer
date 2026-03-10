@@ -3,6 +3,7 @@ const path = require('node:path');
 const exifr = require('exifr');
 
 const IMAGE_EXTENSIONS = new Set(['.jpg', '.jpeg', '.png']);
+const WORKFLOW_FOLDER_KEYS = ['inbox', 'selected', 'rejects', 'hold'];
 
 function isSupportedImage(filePath) {
   const extension = path.extname(filePath).toLowerCase();
@@ -69,6 +70,7 @@ async function buildFolderPayload(folderPath) {
 
   return {
     folderName: path.basename(folderPath) || 'selected folder',
+    folderPath: path.normalize(folderPath),
     images,
   };
 }
@@ -126,6 +128,10 @@ async function resolveCopyDestination(destinationFolder, fileName) {
   }
 }
 
+async function resolveMoveDestination(destinationFolder, fileName) {
+  return resolveCopyDestination(destinationFolder, fileName);
+}
+
 async function copyImageFile(imagePath, destinationFolder) {
   if (typeof imagePath !== 'string' || !isSupportedImage(imagePath)) {
     throw new Error('Unsupported image format');
@@ -143,6 +149,125 @@ async function copyImageFile(imagePath, destinationFolder) {
   return {
     destinationFolder,
     copiedAs: destination.fileName,
+  };
+}
+
+async function moveImageToFolder(imagePath, destinationFolder) {
+  if (typeof imagePath !== 'string' || !isSupportedImage(imagePath)) {
+    throw new Error('Unsupported image format');
+  }
+  if (typeof destinationFolder !== 'string' || destinationFolder.length === 0) {
+    throw new Error('Destination folder is required');
+  }
+
+  const sourcePath = path.normalize(imagePath);
+  const sourceStats = await fsp.stat(sourcePath).catch(() => null);
+  if (!sourceStats || !sourceStats.isFile()) {
+    throw new Error('Image file does not exist');
+  }
+
+  const destinationStats = await fsp.stat(destinationFolder).catch(() => null);
+  if (!destinationStats || !destinationStats.isDirectory()) {
+    throw new Error('Destination folder does not exist');
+  }
+
+  const destination = await resolveMoveDestination(destinationFolder, path.basename(sourcePath));
+  await fsp.rename(sourcePath, destination.fullPath);
+
+  return {
+    sourcePath,
+    destinationPath: destination.fullPath,
+    destinationFolder,
+    fileName: destination.fileName,
+  };
+}
+
+async function countImagesInFolder(folderPath) {
+  const entries = await fsp.readdir(folderPath, { withFileTypes: true });
+  let count = 0;
+  for (const entry of entries) {
+    if (!entry.isFile()) {
+      continue;
+    }
+    if (isHiddenFile(entry.name)) {
+      continue;
+    }
+    if (isSupportedImage(entry.name)) {
+      count += 1;
+    }
+  }
+  return count;
+}
+
+async function listWorkflowFolders(rootPath) {
+  if (typeof rootPath !== 'string' || rootPath.length === 0) {
+    throw new Error('Root folder is required');
+  }
+
+  const normalizedRoot = path.normalize(rootPath);
+  const rootStats = await fsp.stat(normalizedRoot).catch(() => null);
+  if (!rootStats || !rootStats.isDirectory()) {
+    throw new Error('Root folder does not exist');
+  }
+
+  const entries = await fsp.readdir(normalizedRoot, { withFileTypes: true });
+  const directoryEntries = entries.filter((entry) => entry.isDirectory());
+  const directoriesByLowerName = new Map(
+    directoryEntries.map((entry) => [entry.name.toLowerCase(), path.join(normalizedRoot, entry.name)]),
+  );
+
+  const folders = [];
+  for (const key of WORKFLOW_FOLDER_KEYS) {
+    const folderPath = directoriesByLowerName.get(key);
+    if (!folderPath) {
+      continue;
+    }
+    const count = await countImagesInFolder(folderPath);
+    folders.push({
+      key,
+      name: path.basename(folderPath),
+      path: folderPath,
+      count,
+    });
+  }
+
+  const inboxFolder = folders.find((folder) => folder.key === 'inbox');
+  const sourceFolderPath = inboxFolder ? inboxFolder.path : normalizedRoot;
+  const sourceCount = await countImagesInFolder(sourceFolderPath);
+
+  return {
+    rootPath: normalizedRoot,
+    sourceFolderPath,
+    sourceCount,
+    folders,
+  };
+}
+
+async function bulkMoveImages(imagePaths, destinationFolder) {
+  if (!Array.isArray(imagePaths) || imagePaths.length === 0) {
+    return {
+      moved: [],
+      failed: [],
+    };
+  }
+
+  const moved = [];
+  const failed = [];
+  for (const imagePath of imagePaths) {
+    try {
+      const result = await moveImageToFolder(imagePath, destinationFolder);
+      moved.push(result);
+    } catch (error) {
+      failed.push({
+        imagePath,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  }
+
+  return {
+    moved,
+    failed,
   };
 }
 
@@ -198,8 +323,11 @@ module.exports = {
   isSupportedImage,
   isDirectory,
   buildFolderPayload,
+  listWorkflowFolders,
   readImageDataUrl,
   readExifData,
   deleteImageFile,
   copyImageFile,
+  moveImageToFolder,
+  bulkMoveImages,
 };

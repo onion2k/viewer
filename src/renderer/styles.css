@@ -155,7 +155,8 @@ body {
 .stage-topbar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
+  flex-wrap: wrap;
   gap: 12px;
 }
 
@@ -183,6 +184,73 @@ body {
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+.curation-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
+.curation-btn {
+  border: 1px solid #666;
+  background: #3f3f3f;
+  color: #f5f5f5;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.curation-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.session-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.session-controls label {
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.session-controls select,
+.session-controls input {
+  border: 1px solid #6a6a6a;
+  background: #3f3f3f;
+  color: #f5f5f5;
+  border-radius: 6px;
+  padding: 5px 8px;
+  font-size: 0.8rem;
+}
+
+#sessionNoteInput {
+  min-width: 220px;
+}
+
+.workflow-stats {
+  margin: 0;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.audit-log {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 74px;
+  overflow: auto;
+  padding: 6px 8px;
+  border: 1px solid #4f4f4f;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.2);
+  font-size: 0.76rem;
+  color: #d9d9d9;
 }
 
 .size-btn {
