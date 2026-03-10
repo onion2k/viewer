@@ -587,16 +587,17 @@ async function moveFilteredImagesToWorkflow(folderKey) {
   }
 }
 
-async function refreshAfterMove(previousKey, statusPrefix) {
+async function refreshAfterMove(previousKey, statusPrefix, preferredIndex) {
   if (!hasElectronBackend || !workflowSourceFolderPath) {
     return;
   }
+  const fallbackIndex = Number.isInteger(preferredIndex) ? preferredIndex : currentIndex;
   const payload = await electronApi.loadFolder(workflowSourceFolderPath);
   if (!payload) {
     clearImage();
     return;
   }
-  await applyFolderPayload(payload, { preserveCurrentImage: true, statusPrefix });
+  await applyFolderPayload(payload, { preferredIndex: fallbackIndex, statusPrefix });
   if (imageItems.length > 0) {
     const foundIndex = imageItems.findIndex((entry) => entry.key === previousKey);
     if (foundIndex >= 0) {

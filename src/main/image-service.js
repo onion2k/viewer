@@ -172,7 +172,16 @@ async function moveImageToFolder(imagePath, destinationFolder) {
   }
 
   const destination = await resolveMoveDestination(destinationFolder, path.basename(sourcePath));
-  await fsp.rename(sourcePath, destination.fullPath);
+  try {
+    await fsp.rename(sourcePath, destination.fullPath);
+  } catch (error) {
+    if (!error || error.code !== 'EXDEV') {
+      throw error;
+    }
+    // Cross-device move (different volume/filesystem) requires copy + delete.
+    await fsp.copyFile(sourcePath, destination.fullPath);
+    await fsp.unlink(sourcePath);
+  }
 
   return {
     sourcePath,
