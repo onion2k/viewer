@@ -2,6 +2,10 @@
 
 This project is an Electron desktop app for browsing JPG/PNG images in a local folder.
 
+# OSX Permission
+
+After extracting the app to Applications run `xattr -dr com.apple.quarantine /Applications/Viewer.app` to allow permission for it to run or OSX will claim it's broken.
+
 ## Project structure
 
 - `src/main/main.js`: Electron app bootstrap/lifecycle wiring
