@@ -11,7 +11,15 @@ permissions:
 
 jobs:
   build-and-release:
-    runs-on: macos-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            release_script: release:mac
+          - os: windows-latest
+            release_script: release:win
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
 
@@ -21,6 +29,6 @@ jobs:
           cache: npm
 
       - run: npm ci
-      - run: npm run release
+      - run: npm run ${{ matrix.release_script }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
