@@ -1,4 +1,4 @@
-const selectFolderBtn = document.getElementById("selectFolderBtn");
+const inputFolderSelect = document.getElementById("inputFolderSelect");
 const folderInput = document.getElementById("folderInput");
 const statusText = document.getElementById("statusText");
 const imageEl = document.getElementById("imageEl");
@@ -16,6 +16,8 @@ const coverSizeBtn = document.getElementById("coverSizeBtn");
 const fitSizeBtn = document.getElementById("fitSizeBtn");
 const moveOutput1Btn = document.getElementById("moveOutput1Btn");
 const moveOutput2Btn = document.getElementById("moveOutput2Btn");
+const changeOutput1Btn = document.getElementById("changeOutput1Btn");
+const changeOutput2Btn = document.getElementById("changeOutput2Btn");
 const curationDeleteBtn = document.getElementById("curationDeleteBtn");
 const output1PathEl = document.getElementById("output1PathEl");
 const output2PathEl = document.getElementById("output2PathEl");
@@ -30,6 +32,7 @@ const prevBtn = document.getElementById("prevBtn");
 const nextBtn = document.getElementById("nextBtn");
 const lastBtn = document.getElementById("lastBtn");
 const orderSelect = document.getElementById("orderSelect");
+const SELECT_NEW_FOLDER_VALUE = "__select_new_folder__";
 
 const electronApi = window.electronAPI;
 const hasElectronBackend =
@@ -37,6 +40,8 @@ const hasElectronBackend =
   typeof electronApi.pickFolder === "function" &&
   typeof electronApi.loadLastFolder === "function" &&
   typeof electronApi.loadFolder === "function" &&
+  typeof electronApi.openFolder === "function" &&
+  typeof electronApi.getRecentFolders === "function" &&
   typeof electronApi.readImage === "function" &&
   typeof electronApi.readExif === "function" &&
   typeof electronApi.deleteImage === "function" &&
@@ -61,6 +66,8 @@ let isMoving = false;
 let activeTab = "image";
 let imageSizeMode = "fit";
 let hasInputFolderSelected = false;
+let currentInputFolderPath = "";
+let recentInputFolders = [];
 let workflowRootPath = "";
 let workflowSourceFolderPath = "";
 let workflowStatsText = "";
@@ -84,7 +91,7 @@ init().catch((error) => {
 
 async function init() {
   updateNavigation();
-  selectFolderBtn.addEventListener("click", onSelectFolder);
+  inputFolderSelect.addEventListener("change", onInputFolderSelectChange);
   folderInput.addEventListener("change", onFolderInputChange);
   firstBtn.addEventListener("click", () => navigateToIndex(0));
   prevBtn.addEventListener("click", () => navigate(-1));
@@ -101,6 +108,12 @@ async function init() {
   fitSizeBtn.addEventListener("click", () => setImageSizeMode("fit"));
   moveOutput1Btn.addEventListener("click", () => moveCurrentImageToWorkflow("output1"));
   moveOutput2Btn.addEventListener("click", () => moveCurrentImageToWorkflow("output2"));
+  changeOutput1Btn.addEventListener("click", () => {
+    void onChangeWorkflowDestination("output1");
+  });
+  changeOutput2Btn.addEventListener("click", () => {
+    void onChangeWorkflowDestination("output2");
+  });
   curationDeleteBtn.addEventListener("click", onDeleteImage);
   undoMoveBtn.addEventListener("click", undoLastMove);
   imageArea.addEventListener("mousedown", onPanStart);
@@ -111,6 +124,7 @@ async function init() {
   refreshWorkflowButtons();
   renderWorkflowStats();
   renderOutputPathLabels();
+  renderInputFolderSelect("");
   setUiEnabled(false);
   await loadPersistedOutputDestinations();
 
@@ -172,6 +186,8 @@ async function init() {
     return;
   }
 
+  await loadRecentInputFolders();
+
   electronApi.onFolderUpdated((payload) => {
     applyFolderPayload(payload, { preserveCurrentImage: true, isRefresh: true });
   });
@@ -184,23 +200,101 @@ async function init() {
   }
 
   await applyFolderPayload(payload);
+  await loadRecentInputFolders(payload.folderPath);
 }
 
 async function onSelectFolder() {
   if (!hasElectronBackend) {
     folderInput.click();
+    renderInputFolderSelect("");
     return;
   }
 
   try {
     const payload = await electronApi.pickFolder();
     if (!payload) {
+      renderInputFolderSelect(currentInputFolderPath);
       return;
     }
     await applyFolderPayload(payload);
+    await loadRecentInputFolders(payload.folderPath);
   } catch (error) {
     console.error(error);
     setStatus("Unable to select folder.");
+    renderInputFolderSelect(currentInputFolderPath);
+  }
+}
+
+async function onInputFolderSelectChange() {
+  const selectedValue = inputFolderSelect.value;
+  if (selectedValue === SELECT_NEW_FOLDER_VALUE) {
+    await onSelectFolder();
+    return;
+  }
+  if (selectedValue === currentInputFolderPath) {
+    return;
+  }
+
+  if (!hasElectronBackend) {
+    folderInput.click();
+    renderInputFolderSelect("");
+    return;
+  }
+
+  try {
+    const payload = await electronApi.openFolder(selectedValue);
+    if (!payload) {
+      setStatus("Unable to open selected folder.");
+      await loadRecentInputFolders(currentInputFolderPath);
+      return;
+    }
+    await applyFolderPayload(payload);
+    await loadRecentInputFolders(payload.folderPath);
+  } catch (error) {
+    console.error(error);
+    setStatus("Unable to open selected folder.");
+    await loadRecentInputFolders(currentInputFolderPath);
+  }
+}
+
+async function loadRecentInputFolders(selectedPath = currentInputFolderPath) {
+  if (!hasElectronBackend) {
+    recentInputFolders = [];
+    renderInputFolderSelect("");
+    return;
+  }
+
+  try {
+    const folders = await electronApi.getRecentFolders();
+    recentInputFolders = Array.isArray(folders)
+      ? folders.filter((folder) => typeof folder === "string" && folder.length > 0)
+      : [];
+  } catch (error) {
+    console.error(error);
+    recentInputFolders = [];
+  }
+
+  renderInputFolderSelect(selectedPath);
+}
+
+function renderInputFolderSelect(selectedPath) {
+  if (!inputFolderSelect) {
+    return;
+  }
+
+  inputFolderSelect.replaceChildren();
+  inputFolderSelect.appendChild(new Option("Select new folder", SELECT_NEW_FOLDER_VALUE));
+  for (const folderPath of recentInputFolders) {
+    const option = new Option(folderPath, folderPath);
+    option.title = folderPath;
+    inputFolderSelect.appendChild(option);
+  }
+
+  const hasSelectedPath = typeof selectedPath === "string" && selectedPath.length > 0;
+  if (hasSelectedPath && recentInputFolders.includes(selectedPath)) {
+    inputFolderSelect.value = selectedPath;
+  } else {
+    inputFolderSelect.value = SELECT_NEW_FOLDER_VALUE;
   }
 }
 
@@ -211,6 +305,7 @@ async function applyFolderPayload(payload, options = {}) {
   const statusPrefix = typeof options.statusPrefix === "string" ? options.statusPrefix : "";
   const previousKey = preserveCurrentImage && imageItems[currentIndex] ? imageItems[currentIndex].key : null;
   const folderPath = typeof payload.folderPath === "string" ? payload.folderPath : "";
+  currentInputFolderPath = folderPath;
   hasInputFolderSelected = folderPath.length > 0 || allImageItems.length > 0;
   setUiEnabled(hasInputFolderSelected);
 
@@ -288,6 +383,8 @@ function onFolderInputChange(event) {
 
   const firstPath = fileList[0].webkitRelativePath || "";
   const folderName = firstPath.includes("/") ? firstPath.split("/")[0] : "selected folder";
+  currentInputFolderPath = "";
+  renderInputFolderSelect("");
   hasInputFolderSelected = true;
   setUiEnabled(true);
 
@@ -491,6 +588,22 @@ async function ensureWorkflowDestination(folderKey) {
     return existing;
   }
 
+  return setWorkflowDestination(folderKey);
+}
+
+async function onChangeWorkflowDestination(folderKey) {
+  if (!hasElectronBackend || isMoving || isDeleting) {
+    return;
+  }
+  const updated = await setWorkflowDestination(folderKey);
+  if (!updated) {
+    setStatus("Destination update canceled.");
+    return;
+  }
+  setStatus("Updated " + folderKey + " destination to " + updated.path + ".");
+}
+
+async function setWorkflowDestination(folderKey) {
   const chosenPath = await electronApi.pickDestinationFolder("Select destination for " + folderKey);
   if (!chosenPath) {
     return null;
@@ -1076,8 +1189,11 @@ function updateImageTransform() {
 function refreshWorkflowButtons() {
   const currentItem = imageItems[currentIndex];
   const canMove = hasInputFolderSelected && !!currentItem && currentItem.mode === "electron" && !isMoving;
+  const canChangeOutputDestinations = hasElectronBackend && !isMoving && !isDeleting;
   moveOutput1Btn.disabled = !canMove;
   moveOutput2Btn.disabled = !canMove;
+  changeOutput1Btn.disabled = !canChangeOutputDestinations;
+  changeOutput2Btn.disabled = !canChangeOutputDestinations;
   curationDeleteBtn.disabled = isDeleting || isMoving || !currentItem || currentItem.mode !== "electron";
   undoMoveBtn.disabled = isMoving || moveHistory.length === 0;
 }
@@ -1170,6 +1286,9 @@ function isTextEntryFocused() {
   if (tag === "TEXTAREA") {
     return true;
   }
+  if (tag === "SELECT") {
+    return true;
+  }
   if (tag === "INPUT") {
     const inputType = activeElement.getAttribute("type") || "text";
     return inputType !== "button" && inputType !== "checkbox" && inputType !== "radio";
@@ -1197,6 +1316,8 @@ function setUiEnabled(enabled) {
   fitSizeBtn.disabled = !enabled;
   moveOutput1Btn.disabled = !enabled;
   moveOutput2Btn.disabled = !enabled;
+  changeOutput1Btn.disabled = !enabled;
+  changeOutput2Btn.disabled = !enabled;
   curationDeleteBtn.disabled = !enabled;
   undoMoveBtn.disabled = !enabled;
   orderSelect.disabled = !enabled;

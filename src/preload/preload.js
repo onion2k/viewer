@@ -4,6 +4,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
   pickFolder: () => ipcRenderer.invoke('viewer:pickFolder'),
   loadLastFolder: () => ipcRenderer.invoke('viewer:loadLastFolder'),
   loadFolder: (folderPath) => ipcRenderer.invoke('viewer:loadFolder', folderPath),
+  openFolder: (folderPath) => ipcRenderer.invoke('viewer:openFolder', folderPath),
+  getRecentFolders: () => ipcRenderer.invoke('viewer:getRecentFolders'),
   readImage: (imagePath) => ipcRenderer.invoke('viewer:readImage', imagePath),
   readExif: (imagePath) => ipcRenderer.invoke('viewer:readExif', imagePath),
   deleteImage: (imagePath) => ipcRenderer.invoke('viewer:deleteImage', imagePath),

@@ -1,8 +1,48 @@
 const path = require('node:path');
 const { BrowserWindow, dialog, ipcMain } = require('electron');
 
+const MAX_RECENT_FOLDERS = 12;
+
+function normalizeRecentFolders(settings) {
+  const entries = [];
+  if (Array.isArray(settings?.recentFolders)) {
+    for (const value of settings.recentFolders) {
+      if (typeof value === 'string' && value.length > 0) {
+        entries.push(value);
+      }
+    }
+  }
+  if (typeof settings?.lastFolder === 'string' && settings.lastFolder.length > 0) {
+    entries.unshift(settings.lastFolder);
+  }
+
+  const deduped = [];
+  const seen = new Set();
+  for (const entry of entries) {
+    if (seen.has(entry)) {
+      continue;
+    }
+    seen.add(entry);
+    deduped.push(entry);
+    if (deduped.length >= MAX_RECENT_FOLDERS) {
+      break;
+    }
+  }
+  return deduped;
+}
+
 function registerViewerIpcHandlers({ settingsStore, imageService, watchFolder }) {
   const { readSettings, updateSettings } = settingsStore;
+
+  async function rememberRecentFolder(folderPath) {
+    const settings = await readSettings();
+    const currentRecent = normalizeRecentFolders(settings);
+    const nextRecent = [folderPath, ...currentRecent.filter((entry) => entry !== folderPath)].slice(0, MAX_RECENT_FOLDERS);
+    await updateSettings({
+      lastFolder: folderPath,
+      recentFolders: nextRecent,
+    });
+  }
 
   ipcMain.handle('viewer:pickFolder', async (event) => {
     const result = await dialog.showOpenDialog({
@@ -15,7 +55,7 @@ function registerViewerIpcHandlers({ settingsStore, imageService, watchFolder })
     }
 
     const folderPath = result.filePaths[0];
-    await updateSettings({ lastFolder: folderPath });
+    await rememberRecentFolder(folderPath);
     watchFolder(event.sender, folderPath);
     return imageService.buildFolderPayload(folderPath);
   });
@@ -47,6 +87,24 @@ function registerViewerIpcHandlers({ settingsStore, imageService, watchFolder })
     }
     watchFolder(event.sender, folderPath);
     return imageService.buildFolderPayload(folderPath);
+  });
+
+  ipcMain.handle('viewer:openFolder', async (event, folderPath) => {
+    if (typeof folderPath !== 'string' || folderPath.length === 0) {
+      return null;
+    }
+    const exists = await imageService.isDirectory(folderPath);
+    if (!exists) {
+      return null;
+    }
+    await rememberRecentFolder(folderPath);
+    watchFolder(event.sender, folderPath);
+    return imageService.buildFolderPayload(folderPath);
+  });
+
+  ipcMain.handle('viewer:getRecentFolders', async () => {
+    const settings = await readSettings();
+    return normalizeRecentFolders(settings);
   });
 
   ipcMain.handle('viewer:readImage', async (_event, imagePath) => {

@@ -8,7 +8,10 @@
   </head>
   <body>
     <header class="toolbar">
-      <button id="selectFolderBtn" type="button">Select Input Folder</button>
+      <label for="inputFolderSelect" class="folder-select-label">Input folder</label>
+      <select id="inputFolderSelect" aria-label="Select input folder">
+        <option value="__select_new_folder__">Select new folder</option>
+      </select>
       <button id="deleteBtn" type="button" disabled hidden>Delete Image</button>
       <button id="moveBtn" type="button" disabled hidden>Move image</button>
       <button id="changeMoveFolderBtn" type="button" disabled hidden>Change move folder</button>
@@ -53,8 +56,10 @@
           <div class="curation-controls" role="group" aria-label="Curation actions">
             <button id="moveOutput1Btn" class="curation-btn" type="button" disabled>Output 1 (1)</button>
             <span id="output1PathEl" class="output-path">Not set</span>
+            <button id="changeOutput1Btn" class="curation-btn curation-btn-secondary" type="button" disabled>Change</button>
             <button id="moveOutput2Btn" class="curation-btn" type="button" disabled>Output 2 (2)</button>
             <span id="output2PathEl" class="output-path">Not set</span>
+            <button id="changeOutput2Btn" class="curation-btn curation-btn-secondary" type="button" disabled>Change</button>
             <button id="curationDeleteBtn" class="curation-btn curation-btn-danger" type="button" disabled>Delete (D)</button>
             <button id="undoMoveBtn" class="curation-btn" type="button" disabled>Undo (U)</button>
           </div>

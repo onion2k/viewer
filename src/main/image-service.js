@@ -306,14 +306,23 @@ async function readExifData(imagePath) {
     throw new Error('Unsupported image format');
   }
 
-  const parsed = await exifr.parse(imagePath, {
-    tiff: true,
-    exif: true,
-    gps: true,
-    iptc: true,
-    xmp: true,
-    icc: false,
-  });
+  const normalizedPath = path.normalize(imagePath);
+  let parsed;
+  try {
+    parsed = await exifr.parse(normalizedPath, {
+      tiff: true,
+      exif: true,
+      gps: true,
+      iptc: true,
+      xmp: true,
+      icc: false,
+    });
+  } catch (error) {
+    if (error && (error.code === 'ENOENT' || error.code === 'ENOTDIR')) {
+      return [];
+    }
+    throw error;
+  }
 
   if (!parsed || typeof parsed !== 'object') {
     return [];
